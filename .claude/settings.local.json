@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls c:/Users/21113/Desktop/soft_ks/static/*/)",
+      "Bash(python:*)"
+    ]
+  }
+}

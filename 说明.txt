@@ -1,0 +1,58 @@
+激活conda（python环境）
+安装 ultralytics：pip install -U ultralytics
+
+命令行预测：
+yolo predict model=best.pt source='图片地址'  save_txt=True save_conf=True
+
+python预测：
+from ultralytics import YOLO
+
+# Load a pretrained YOLO26n model
+model = YOLO("best.pt")
+
+# Run inference on 'bus.jpg' with arguments
+model.predict("图片路径", save=True, imgsz=1280, save_txt=True)
+
+类别：
+  0: i2（非机动车行驶）
+  1: i4（机动车行驶）
+  2: i5（靠右侧道路行驶）
+  3: il100（最低限速100）
+  4: il60（最低限速60）
+  5: il80（最低限速80）
+  6: io（其他指示标志）
+  7: ip（人行横道）
+  8: p10（禁止机动车驶入）
+  9: p11（禁止鸣喇叭）
+  10: p12（禁止二轮摩托车驶入）
+  11: p19（禁止向右转弯）
+  12: p23（禁止向左转弯）
+  13: p26（禁止载货汽车驶入）
+  14: p27（禁止运输危险物品车辆驶入）
+  15: p3（禁止大型客车驶入）
+  16: p5（禁止掉头）
+  17: p6（禁止非机动车进入）
+  18: pg（减速让行）
+  19: ph4（限制高度4m）
+  20: ph4.5（限制高度3.5m）
+  21: pl100（限制速度100）
+  22: pl120（限制速度120）
+  23: pl20（限制速度20）
+  24: pl30（限制速度30）
+  25: pl40（限制速度40）
+  26: pl5（限制速度5）
+  27: pl50（限制速度50）
+  28: pl60（限制速度60）
+  29: pl70（限制速度70）
+  30: pl80（限制速度80）
+  31: pm20（限制质量20t）
+  32: pm30（限制质量30t）
+  33: pm55（限制质量55t）
+  34: pn（禁止停车）
+  35: pne（禁止驶入）
+  36: po（其他禁止标志）
+  37: pr40（解除限制速度40）
+  38: w13（十字交叉路口）
+  39: w55（注意儿童）
+  40: w57（注意行人）
+  41: w59（注意合流）
