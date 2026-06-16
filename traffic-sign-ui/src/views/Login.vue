@@ -58,11 +58,12 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import api, { getErrorMessage } from '../api/client'
 
 const router = useRouter()
+const route = useRoute()
 const formRef = ref(null)
 const loading = ref(false)
 
@@ -79,7 +80,7 @@ const handleLogin = async () => {
     if (!valid) return
     loading.value = true
     try {
-      const res = await axios.post('http://localhost:8000/api/login', {
+      const res = await api.post('/api/login', {
         username: form.username,
         password: form.password
       })
@@ -87,10 +88,12 @@ const handleLogin = async () => {
       localStorage.setItem('username', res.data.username)
       localStorage.setItem('role', res.data.role)
       ElMessage.success('登录成功，欢迎回来！')
-      router.push('/dashboard')
+      const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+        ? route.query.redirect
+        : '/dashboard'
+      router.push(redirect)
     } catch (err) {
-      const msg = err.response?.data?.detail || '登录失败，请检查网络'
-      ElMessage.error(msg)
+      ElMessage.error(getErrorMessage(err, '登录失败，请检查网络'))
     } finally {
       loading.value = false
     }

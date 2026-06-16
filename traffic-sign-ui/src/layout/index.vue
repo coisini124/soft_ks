@@ -22,6 +22,11 @@
           <span>历史检测记录</span>
         </el-menu-item>
 
+        <el-menu-item index="/query">
+          <el-icon><Search /></el-icon>
+          <span>标志位置查询</span>
+        </el-menu-item>
+
         <!-- 仅管理员可见 -->
         <template v-if="isAdmin">
           <el-menu-item index="/signs">
@@ -31,6 +36,10 @@
           <el-menu-item index="/analysis">
             <el-icon><PieChart /></el-icon>
             <span>数据分析可视化</span>
+          </el-menu-item>
+          <el-menu-item index="/audit-logs">
+            <el-icon><Operation /></el-icon>
+            <span>操作审计日志</span>
           </el-menu-item>
         </template>
       </el-menu>
@@ -70,7 +79,7 @@
 </template>
 
 <script setup>
-import { Monitor, Document, Setting, PieChart } from '@element-plus/icons-vue'
+import { Monitor, Document, Setting, PieChart, Search, Operation } from '@element-plus/icons-vue'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'

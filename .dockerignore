@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+.runtime
+reports
+static
+traffic_system.db
+traffic-sign-ui/node_modules
+traffic-sign-ui/dist
+best.pt
+best.onnx
+*.jpg
+*.jpeg
+*.png
+__pycache__
+*.pyc

@@ -4,6 +4,33 @@ __pycache__/
 .claude/
 .vscode/
 **/.vscode/
+.venv/
+.env
+
+traffic_system.db
+static/
+.runtime/
+reports/
+models/
+traffic-sign-ui/node_modules/
+traffic-sign-ui/dist/
+backend-dev.log
+defense_materials/*
+!defense_materials/README.md
+!defense_materials/PPT互动讲解脚本.md
+!defense_materials/系统功能说明书.md
+!defense_materials/traffic_sign_product_defense_imagegen/
+!defense_materials/traffic_sign_product_defense_imagegen/**
+defense_materials/**/generated_raw/
+defense_materials/**/.slide_*.lock
+
+# one-off draft generators kept out of the repository
+scripts/build_defense_materials.py
+scripts/create_final_codex_ppt_deck.py
+scripts/create_image_based_defense_ppt.py
+scripts/prepare_final_defense_codex_ppt.py
+scripts/prepare_true_imagegen_deck.py
+scripts/fcntl.py
 
 best.onnx
 best.pt

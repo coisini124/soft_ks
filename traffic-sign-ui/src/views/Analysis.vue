@@ -43,25 +43,178 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="20">
+      <el-col :span="24">
+        <el-card shadow="hover" class="chart-card">
+          <template #header><div class="card-header"><span style="font-weight: bold; color: #67C23A;"><el-icon><Refresh /></el-icon> 近30天标志字典更新频率</span></div></template>
+          <div ref="signUpdateLineChartRef" style="height: 300px; width: 100%;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card v-if="isAdmin" shadow="hover" class="mapping-card">
+      <template #header>
+        <div class="report-header">
+          <span style="font-weight: bold;"><el-icon><InfoFilled /></el-icon> 模型类别映射检查</span>
+          <el-button type="primary" :loading="mappingChecking" @click="fetchMappingCheck">
+            <el-icon><Refresh /></el-icon> 重新检查
+          </el-button>
+        </div>
+      </template>
+      <el-skeleton v-if="mappingChecking && !mappingCheck" :rows="3" animated />
+      <template v-else-if="mappingCheck">
+        <el-alert
+          :type="mappingCheck.ready ? 'success' : 'warning'"
+          :title="mappingCheck.ready ? '字典与模型映射检查通过' : '模型映射仍需关注'"
+          :closable="false"
+          show-icon
+          class="mapping-alert"
+        />
+        <el-descriptions :column="4" border size="small">
+          <el-descriptions-item label="检测模式">{{ mappingCheck.mode }}</el-descriptions-item>
+          <el-descriptions-item label="字典数量">{{ mappingCheck.dictionary.total }}</el-descriptions-item>
+          <el-descriptions-item label="字典 ID 范围">
+            {{ mappingCheck.dictionary.min_id }} - {{ mappingCheck.dictionary.max_id }}
+          </el-descriptions-item>
+          <el-descriptions-item label="模型类别数">
+            {{ mappingCheck.model.class_count ?? '未加载' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="模型文件">
+            <el-tag :type="mappingCheck.model.available ? 'success' : 'warning'" size="small">
+              {{ mappingCheck.model.available ? '已找到' : '缺失' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="缺失字典 ID">
+            {{ mappingCheck.dictionary.missing_ids.length ? mappingCheck.dictionary.missing_ids.join(', ') : '无' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="重复编码">
+            {{ mappingCheck.dictionary.duplicate_codes.length ? mappingCheck.dictionary.duplicate_codes.join(', ') : '无' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="限速规则问题">
+            {{ mappingCheck.dictionary.limit_rule_issues.length }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <div v-if="mappingCheck.blocking_issues.length || mappingCheck.warnings.length" class="mapping-notes">
+          <el-tag
+            v-for="item in [...mappingCheck.blocking_issues, ...mappingCheck.warnings]"
+            :key="item"
+            :type="mappingCheck.blocking_issues.includes(item) ? 'danger' : 'warning'"
+            effect="plain"
+          >
+            {{ item }}
+          </el-tag>
+        </div>
+      </template>
+    </el-card>
+
+    <el-card v-if="isAdmin" shadow="hover" class="storage-card">
+      <template #header>
+        <div class="report-header">
+          <span style="font-weight: bold;"><el-icon><InfoFilled /></el-icon> 静态文件存储</span>
+          <div>
+            <el-button :loading="storageLoading" @click="fetchStorageStatus">
+              <el-icon><Refresh /></el-icon> 刷新
+            </el-button>
+            <el-popconfirm
+              title="确定清理未被检测记录引用的孤儿文件吗？"
+              confirm-button-text="清理"
+              cancel-button-text="取消"
+              @confirm="cleanupStorage"
+            >
+              <template #reference>
+                <el-button type="warning" :loading="storageCleaning" :disabled="!storageStatus?.orphaned_files">
+                  清理孤儿文件
+                </el-button>
+              </template>
+            </el-popconfirm>
+          </div>
+        </div>
+      </template>
+      <el-skeleton v-if="storageLoading && !storageStatus" :rows="2" animated />
+      <el-descriptions v-else-if="storageStatus" :column="4" border size="small">
+        <el-descriptions-item label="文件总数">{{ storageStatus.total_files }}</el-descriptions-item>
+        <el-descriptions-item label="总占用">{{ formatBytes(storageStatus.total_bytes) }}</el-descriptions-item>
+        <el-descriptions-item label="记录引用">{{ storageStatus.referenced_files }}</el-descriptions-item>
+        <el-descriptions-item label="孤儿文件">
+          <el-tag :type="storageStatus.orphaned_files ? 'warning' : 'success'" size="small">
+            {{ storageStatus.orphaned_files }} 个 / {{ formatBytes(storageStatus.orphaned_bytes) }}
+          </el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
+      <div v-if="storageStatus?.orphaned_samples?.length" class="storage-samples">
+        <el-tag
+          v-for="item in storageStatus.orphaned_samples.slice(0, 8)"
+          :key="item.path"
+          type="warning"
+          effect="plain"
+        >
+          {{ item.path }} ({{ formatBytes(item.size) }})
+        </el-tag>
+      </div>
+    </el-card>
+
+    <el-card v-if="isAdmin" shadow="hover" class="report-card">
+      <template #header>
+        <div class="report-header">
+          <span style="font-weight: bold;"><el-icon><InfoFilled /></el-icon> 每日统计报告</span>
+          <el-button type="success" :loading="rebuildingReport" @click="rebuildYesterdayReport">
+            <el-icon><Refresh /></el-icon> 生成昨日报告
+          </el-button>
+        </div>
+      </template>
+      <el-table :data="dailyReports" border stripe>
+        <el-table-column prop="stat_date" label="统计日期" width="140" />
+        <el-table-column prop="total_detections" label="检测总数" width="120" align="center" />
+        <el-table-column prop="total_violations" label="违规总数" width="120" align="center" />
+        <el-table-column label="高频标志 TOP3" min-width="240">
+          <template #default="{ row }">
+            <el-tag
+              v-for="item in row.top_signs.slice(0, 3)"
+              :key="item.name"
+              effect="plain"
+              style="margin-right: 6px;"
+            >
+              {{ item.name }} x{{ item.value }}
+            </el-tag>
+            <span v-if="row.top_signs.length === 0" style="color: #909399;">暂无标志数据</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="生成时间" width="180" />
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="exportDailyReport(row.stat_date)">
+              <el-icon><Download /></el-icon> 下载
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import axios from 'axios'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
-import { DataLine, Warning, Odometer, Bell, Refresh, InfoFilled } from '@element-plus/icons-vue'
+import { DataLine, Warning, Odometer, Bell, Refresh, InfoFilled, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-
-// --- 根据后端同学 IP 修改 ---
-const baseURL = 'http://localhost:8000'
+import api, { downloadBlob, getErrorMessage } from '../api/client'
 
 const barChartRef = ref(null)
 const pieChartRef = ref(null)
 const detectLineChartRef = ref(null)
 const violationLineChartRef = ref(null)
+const signUpdateLineChartRef = ref(null)
 const cacheDate = ref(null)
 const refreshing = ref(false)
+const rebuildingReport = ref(false)
+const mappingChecking = ref(false)
+const mappingCheck = ref(null)
+const dailyReports = ref([])
+const storageStatus = ref(null)
+const storageLoading = ref(false)
+const storageCleaning = ref(false)
+const isAdmin = computed(() => localStorage.getItem('role') === 'admin')
 
 let instances = {}
 
@@ -128,7 +281,7 @@ const initLineChart = (domRef, data, colorStr, areaColorRgba, name) => {
 
 const fetchDataAndRender = async () => {
   try {
-    const res = await axios.get(`${baseURL}/api/stats`)
+    const res = await api.get('/api/stats')
     cacheDate.value = res.data.cache_date || null
 
     // 销毁旧实例再重绘，避免手动刷新时图表叠加
@@ -155,9 +308,97 @@ const fetchDataAndRender = async () => {
       'rgba(245,108,108,0.5)', 
       '预警量'
     )
+
+    instances.signUpdateLine = initLineChart(
+      signUpdateLineChartRef.value,
+      res.data.sign_update_trend || [],
+      '#67C23A',
+      'rgba(103,194,58,0.35)',
+      '更新次数'
+    )
     
   } catch (error) {
-    ElMessage.error('获取统计数据失败')
+    ElMessage.error(getErrorMessage(error, '获取统计数据失败'))
+  }
+}
+
+const fetchDailyReports = async () => {
+  if (!isAdmin.value) return
+  try {
+    const res = await api.get('/api/reports/daily', { params: { limit: 30 } })
+    dailyReports.value = res.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '获取日报列表失败'))
+  }
+}
+
+const fetchMappingCheck = async () => {
+  if (!isAdmin.value) return
+  mappingChecking.value = true
+  try {
+    const res = await api.get('/api/model/mapping-check')
+    mappingCheck.value = res.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '获取模型映射检查失败'))
+  } finally {
+    mappingChecking.value = false
+  }
+}
+
+const rebuildYesterdayReport = async () => {
+  rebuildingReport.value = true
+  try {
+    await api.post('/api/reports/daily/rebuild')
+    ElMessage.success('昨日报告已生成')
+    await fetchDailyReports()
+    await fetchDataAndRender()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '生成日报失败'))
+  } finally {
+    rebuildingReport.value = false
+  }
+}
+
+const exportDailyReport = async (statDate) => {
+  try {
+    const res = await api.get(`/api/reports/daily/${statDate}/export`, { responseType: 'blob' })
+    downloadBlob(res.data, `daily_report_${statDate}.csv`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '下载日报失败'))
+  }
+}
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+const fetchStorageStatus = async () => {
+  if (!isAdmin.value) return
+  storageLoading.value = true
+  try {
+    const res = await api.get('/api/storage/status')
+    storageStatus.value = res.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '获取静态文件存储状态失败'))
+  } finally {
+    storageLoading.value = false
+  }
+}
+
+const cleanupStorage = async () => {
+  storageCleaning.value = true
+  try {
+    const res = await api.post('/api/storage/cleanup', null, { params: { dry_run: false } })
+    storageStatus.value = res.data.status
+    ElMessage.success(`已清理 ${res.data.removed_file_count} 个孤儿文件`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '清理孤儿文件失败'))
+  } finally {
+    storageCleaning.value = false
   }
 }
 
@@ -170,12 +411,18 @@ const handleResize = () => {
 
 onMounted(() => {
   fetchDataAndRender()
+  fetchDailyReports()
+  fetchMappingCheck()
+  fetchStorageStatus()
   window.addEventListener('resize', handleResize)
 })
 
 const refresh = async () => {
   refreshing.value = true
   await fetchDataAndRender()
+  await fetchDailyReports()
+  await fetchMappingCheck()
+  await fetchStorageStatus()
   refreshing.value = false
 }
 
@@ -200,6 +447,38 @@ onBeforeUnmount(() => {
 .chart-card {
   border-radius: 8px;
   margin-bottom: 20px;
+}
+.report-card {
+  border-radius: 8px;
+}
+.mapping-card {
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.storage-card {
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.storage-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.mapping-alert {
+  margin-bottom: 12px;
+}
+.mapping-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .card-header {
   font-size: 15px;

@@ -29,6 +29,42 @@
             <el-option label="有违规" value="true" />
             <el-option label="无违规" value="false" />
           </el-select>
+          <el-select
+            v-if="activeTab === 'violations'"
+            v-model="searchParams.violationStatus"
+            placeholder="处理状态"
+            clearable
+            style="width: 130px; margin-left: 12px;"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="待处理" value="pending" />
+            <el-option label="已处理" value="handled" />
+          </el-select>
+          <el-select
+            v-if="activeTab === 'violations'"
+            v-model="searchParams.violationType"
+            placeholder="违规类型"
+            clearable
+            style="width: 140px; margin-left: 12px;"
+          >
+            <el-option label="全部类型" value="" />
+            <el-option label="超速行驶" value="speeding" />
+            <el-option label="违规掉头" value="illegal_u_turn" />
+            <el-option label="违规鸣笛" value="illegal_honking" />
+            <el-option label="违规停车" value="illegal_parking" />
+          </el-select>
+          <el-select
+            v-if="activeTab === 'violations'"
+            v-model="searchParams.severity"
+            placeholder="风险级别"
+            clearable
+            style="width: 120px; margin-left: 12px;"
+          >
+            <el-option label="全部级别" value="" />
+            <el-option label="高危" value="high" />
+            <el-option label="中危" value="medium" />
+            <el-option label="低危" value="low" />
+          </el-select>
           <el-button type="primary" style="margin-left: 12px;" @click="handleSearch">
             <el-icon style="margin-right: 5px;"><Search /></el-icon> 搜索
           </el-button>
@@ -36,8 +72,11 @@
         </div>
 
         <div class="action-section">
-          <el-button v-if="isAdmin" type="success" @click="exportReport">
+          <el-button v-if="activeTab === 'detections' && isAdmin" type="success" @click="exportReport">
             <el-icon style="margin-right: 5px;"><Download /></el-icon> 导出 CSV 报表
+          </el-button>
+          <el-button v-if="activeTab === 'violations'" type="warning" @click="exportViolations">
+            <el-icon style="margin-right: 5px;"><Download /></el-icon> 导出违规台账
           </el-button>
         </div>
       </div>
@@ -50,16 +89,31 @@
           <el-table :data="recordsList" v-loading="loading" border stripe style="width: 100%">
             <el-table-column prop="id" label="记录 ID" width="80" align="center" />
             <el-table-column prop="create_time" label="检测时间" width="180" />
+            <el-table-column label="来源" width="90" align="center">
+              <template #default="scope">
+                <el-tag :type="scope.row.source_type === 'video' ? 'warning' : 'primary'" effect="plain">
+                  {{ scope.row.source_type === 'video' ? '视频' : '图片' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="location_text" label="位置摘要" min-width="180">
+              <template #default="scope">
+                <span v-if="scope.row.location_text">{{ scope.row.location_text }}</span>
+                <span v-else class="muted">未解析</span>
+              </template>
+            </el-table-column>
             
             <el-table-column label="抓拍原图" width="120" align="center">
               <template #default="scope">
                 <el-image 
+                  v-if="scope.row.source_type !== 'video'"
                   style="width: 60px; height: 60px; border-radius: 4px;"
                   :src="scope.row.original_image"
                   :preview-src-list="[scope.row.original_image]"
                   preview-teleported
                   fit="cover"
                 />
+                <el-tag v-else type="warning" effect="plain">视频</el-tag>
               </template>
             </el-table-column>
             
@@ -138,15 +192,55 @@
                 <el-link type="primary" @click="openDetail(scope.row.detect_id)"># {{ scope.row.detect_id }}</el-link>
               </template>
             </el-table-column>
+            <el-table-column label="违规类型" width="130" align="center">
+              <template #default="scope">
+                <el-tag type="warning" effect="plain">
+                  {{ scope.row.violation_label || getViolationLabel(scope.row.violation_type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="风险级别" width="100" align="center">
+              <template #default="scope">
+                <el-tag :type="getSeverityTag(scope.row.severity)" effect="dark">
+                  {{ getSeverityText(scope.row.severity) }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="违规详情说明">
               <template #default="scope">
                 <el-alert :title="scope.row.violation_msg" type="error" :closable="false" show-icon />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" align="center">
+            <el-table-column label="处理状态" width="130" align="center">
+              <template #default="scope">
+                <el-tag :type="scope.row.status === 'handled' ? 'success' : 'danger'" effect="plain">
+                  {{ scope.row.status === 'handled' ? '已处理' : '待处理' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="handled_by" label="处理人" width="110" align="center">
+              <template #default="scope">
+                {{ scope.row.handled_by || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="handled_at" label="处理时间" width="180">
+              <template #default="scope">
+                {{ scope.row.handled_at || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" align="center">
               <template #default="scope">
                 <el-button size="small" type="primary" link @click="openDetail(scope.row.detect_id)">
                   查看对比图
+                </el-button>
+                <el-button
+                  v-if="isAdmin"
+                  size="small"
+                  :type="scope.row.status === 'handled' ? 'warning' : 'success'"
+                  link
+                  @click="updateViolationStatus(scope.row)"
+                >
+                  {{ scope.row.status === 'handled' ? '重新打开' : '确认处理' }}
                 </el-button>
               </template>
             </el-table-column>
@@ -174,17 +268,32 @@
       <p style="color:#909399; margin-top:12px;">加载中...</p>
     </div>
     <div v-else-if="detailData">
+      <el-alert
+        v-if="detailData.location_text"
+        :title="`位置摘要：${detailData.location_text}`"
+        type="info"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px;"
+      />
       <!-- 违规警报区 -->
       <div v-if="detailData.violations && detailData.violations.length > 0" style="margin-bottom: 20px;">
         <el-alert
           v-for="(v, i) in detailData.violations"
           :key="i"
-          :title="v.violation_msg"
+          :title="`${v.violation_msg}（${v.status === 'handled' ? '已处理' : '待处理'}）`"
           type="error"
           show-icon
           :closable="false"
           style="margin-bottom: 8px;"
-        />
+        >
+          <el-tag type="warning" effect="plain" style="margin-right: 8px;">
+            {{ v.violation_label || getViolationLabel(v.violation_type) }}
+          </el-tag>
+          <el-tag :type="getSeverityTag(v.severity)" effect="dark">
+            {{ getSeverityText(v.severity) }}
+          </el-tag>
+        </el-alert>
       </div>
       <el-alert v-else title="本次检测未发现违规行为" type="success" show-icon :closable="false" style="margin-bottom: 20px;" />
 
@@ -225,6 +334,15 @@
         <span v-if="!detailData.detected_signs || detailData.detected_signs === '未检测到标志'" style="color:#909399;">无标志</span>
       </div>
 
+      <el-divider content-position="left">结构化解析结果</el-divider>
+      <el-table :data="detailData.details || []" size="small" border style="width: 100%">
+        <el-table-column prop="meaning" label="含义" min-width="120" />
+        <el-table-column prop="sign_type" label="类型" width="100" />
+        <el-table-column prop="confidence" label="置信度" width="90" />
+        <el-table-column prop="position_desc" label="位置" min-width="180" />
+        <el-table-column prop="recommended_speed" label="建议速度" width="100" />
+      </el-table>
+
       <el-divider />
       <p style="color:#909399; font-size:13px;">检测时间：{{ detailData.create_time }}　记录ID：{{ detailData.id }}</p>
     </div>
@@ -234,11 +352,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Search, Download, Loading, ZoomIn } from '@element-plus/icons-vue'
-
-const baseURL = 'http://localhost:8000'
+import api, { downloadBlob, getErrorMessage } from '../api/client'
 const isAdmin = computed(() => localStorage.getItem('role') === 'admin')
 
 // 页面状态
@@ -249,7 +365,10 @@ const loading = ref(false)
 const searchParams = reactive({
   signType: '',
   dateRange: null,
-  hasViolation: ''
+  hasViolation: '',
+  violationStatus: '',
+  violationType: '',
+  severity: ''
 })
 
 // 分页与数据状态 (全量记录)
@@ -259,6 +378,29 @@ const recordsList = ref([])
 // 分页与数据状态 (违规记录)
 const violationPage = reactive({ current: 1, size: 10, total: 0 })
 const violationsList = ref([])
+
+const getViolationLabel = (type) => {
+  const labels = {
+    speeding: '超速行驶',
+    illegal_u_turn: '违规掉头',
+    illegal_honking: '违规鸣笛',
+    illegal_parking: '违规停车'
+  }
+  return labels[type] || '其他违规'
+}
+
+const getSeverityTag = (severity) => {
+  if (severity === 'high') return 'danger'
+  if (severity === 'medium') return 'warning'
+  return 'info'
+}
+
+const getSeverityText = (severity) => {
+  if (severity === 'high') return '高危'
+  if (severity === 'medium') return '中危'
+  if (severity === 'low') return '低危'
+  return '提示'
+}
 
 // 获取全量检测记录
 const fetchRecords = async () => {
@@ -272,31 +414,40 @@ const fetchRecords = async () => {
       end_time: searchParams.dateRange ? searchParams.dateRange[1] : undefined,
       has_violation: searchParams.hasViolation || undefined
     }
-    const res = await axios.get(`${baseURL}/api/records`, { params })
+    const res = await api.get('/api/records', { params })
     recordsList.value = res.data.data
     recordPage.total = res.data.total
   } catch (error) {
-    ElMessage.error('获取检测记录失败')
+    ElMessage.error(getErrorMessage(error, '获取检测记录失败'))
   } finally {
     loading.value = false
   }
 }
 
 // 获取违规记录
+const buildViolationParams = (withPagination = true) => {
+  const params = {
+    start_time: searchParams.dateRange ? searchParams.dateRange[0] : undefined,
+    end_time: searchParams.dateRange ? searchParams.dateRange[1] : undefined,
+    status: searchParams.violationStatus || undefined,
+    violation_type: searchParams.violationType || undefined,
+    severity: searchParams.severity || undefined
+  }
+  if (withPagination) {
+    params.page = violationPage.current
+    params.size = violationPage.size
+  }
+  return params
+}
+
 const fetchViolations = async () => {
   loading.value = true
   try {
-    const params = {
-      page: violationPage.current,
-      size: violationPage.size,
-      start_time: searchParams.dateRange ? searchParams.dateRange[0] : undefined,
-      end_time: searchParams.dateRange ? searchParams.dateRange[1] : undefined
-    }
-    const res = await axios.get(`${baseURL}/api/violations`, { params })
+    const res = await api.get('/api/violations', { params: buildViolationParams() })
     violationsList.value = res.data.data
     violationPage.total = res.data.total
   } catch (error) {
-    ElMessage.error('获取违规记录失败')
+    ElMessage.error(getErrorMessage(error, '获取违规记录失败'))
   } finally {
     loading.value = false
   }
@@ -318,6 +469,9 @@ const resetSearch = () => {
   searchParams.signType = ''
   searchParams.dateRange = null
   searchParams.hasViolation = ''
+  searchParams.violationStatus = ''
+  searchParams.violationType = ''
+  searchParams.severity = ''
   handleSearch()
 }
 
@@ -325,13 +479,13 @@ const resetSearch = () => {
 const handleDeleteRecord = async (id) => {
   try {
     // 调用后端我们刚才加的 DELETE 接口
-    await axios.delete(`${baseURL}/api/records/${id}`)
+    await api.delete(`/api/records/${id}`)
     ElMessage.success('记录删除成功')
     
     // 删除成功后，重新去后端拉取最新数据，刷新表格
     fetchRecords() 
   } catch (error) {
-    ElMessage.error('删除失败，请检查网络或联系管理员')
+    ElMessage.error(getErrorMessage(error, '删除失败，请检查网络或联系管理员'))
     console.error(error)
   }
 }
@@ -352,10 +506,10 @@ const openDetail = async (detectId) => {
   detailLoading.value = true
   detailData.value = null
   try {
-    const res = await axios.get(`${baseURL}/api/records/${detectId}`)
+    const res = await api.get(`/api/records/${detectId}`)
     detailData.value = res.data
-  } catch {
-    ElMessage.error('获取详情失败')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '获取详情失败'))
     drawerVisible.value = false
   } finally {
     detailLoading.value = false
@@ -363,16 +517,54 @@ const openDetail = async (detectId) => {
 }
 
 // 导出 CSV（携带当前查询条件）
-const exportReport = () => {
+const exportReport = async () => {
   const params = new URLSearchParams()
   if (searchParams.signType) params.append('sign_type', searchParams.signType)
   if (searchParams.dateRange) {
     params.append('start_time', searchParams.dateRange[0])
     params.append('end_time', searchParams.dateRange[1])
   }
-  const query = params.toString() ? `?${params.toString()}` : ''
-  window.open(`${baseURL}/api/report${query}`, '_blank')
-  ElMessage.success('报表下载任务已启动')
+  try {
+    const res = await api.get('/api/report', {
+      params: Object.fromEntries(params.entries()),
+      responseType: 'blob'
+    })
+    const disposition = res.headers['content-disposition'] || ''
+    const match = disposition.match(/filename=([^;]+)/)
+    const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : 'traffic_report.csv'
+    downloadBlob(res.data, filename)
+    ElMessage.success('报表下载成功')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '报表下载失败'))
+  }
+}
+
+const exportViolations = async () => {
+  try {
+    const res = await api.get('/api/violations/export', {
+      params: buildViolationParams(false),
+      responseType: 'blob'
+    })
+    const disposition = res.headers['content-disposition'] || ''
+    const match = disposition.match(/filename=([^;]+)/)
+    const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : 'violation_report.csv'
+    downloadBlob(res.data, filename)
+    ElMessage.success('违规台账下载成功')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '违规台账下载失败'))
+  }
+}
+
+const updateViolationStatus = async (row) => {
+  const nextStatus = row.status === 'handled' ? 'pending' : 'handled'
+  try {
+    await api.put(`/api/violations/${row.id}/status`, { status: nextStatus })
+    ElMessage.success(nextStatus === 'handled' ? '违规警报已确认处理' : '违规警报已重新打开')
+    fetchViolations()
+    if (activeTab.value === 'detections') fetchRecords()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '更新违规处理状态失败'))
+  }
 }
 
 

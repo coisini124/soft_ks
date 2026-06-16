@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      DATABASE_URL: sqlite:////data/traffic_system.db
+      APP_BASE_URL: http://localhost:8000
+      MODEL_PATH: /models/best.pt
+      DETECTOR_MODE: mock
+      MOCK_SIGN_ID: 28
+      DETECTION_CONFIDENCE: 0.25
+      STATIC_DIR: /app/static
+      TOKEN_SECRET: change-me-before-production
+      TOKEN_TTL_SECONDS: 86400
+      MAX_UPLOAD_MB: 20
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      - app_data:/data
+      - app_static:/app/static
+      - ./models:/models:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./traffic-sign-ui
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  app_data:
+  app_static:

@@ -77,8 +77,8 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import api, { getErrorMessage } from '../api/client'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -116,7 +116,7 @@ const handleRegister = async () => {
     if (!valid) return
     loading.value = true
     try {
-      await axios.post('http://localhost:8000/api/register', {
+      await api.post('/api/register', {
         username: form.username,
         password: form.password,
         role: 'driver'
@@ -124,8 +124,7 @@ const handleRegister = async () => {
       ElMessage.success('注册成功！请登录')
       router.push('/login')
     } catch (err) {
-      const msg = err.response?.data?.detail || '注册失败，请稍后重试'
-      ElMessage.error(msg)
+      ElMessage.error(getErrorMessage(err, '注册失败，请稍后重试'))
     } finally {
       loading.value = false
     }
